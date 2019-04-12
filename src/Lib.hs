@@ -17,7 +17,7 @@ createRandomGrid x y = fmap Grid randomCells
         randomBools :: IO [[Bool]]
         randomBools = replicateM x (replicateM y randomIO)
         randomCells :: IO [[Cell]]
-        randomCells = (fmap . fmap . fmap) (cellFromBool) randomBools
+        randomCells = (fmap . fmap . fmap) cellFromBool randomBools
 
 cellFromBool :: Bool -> Cell 
 cellFromBool True = Alive

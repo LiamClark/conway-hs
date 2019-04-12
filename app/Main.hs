@@ -2,13 +2,18 @@
 module Main where
 
 import qualified GI.Gtk as Gtk
+import qualified GI.GLib as GLib
 import Data.GI.Base
 import GI.Cairo as Cairo
 
 import qualified Data.Text as T
 
 import Data.Functor.Compose
+import Data.IORef
 
+import Control.Monad
+import Control.Concurrent
+import Control.Concurrent.Async.Timer as Timer
 import Lib
 
 main :: IO ()
@@ -24,14 +29,32 @@ main = do
             #sensitive := False,
             #label := "Started"])
 
-    cellGrid <- createRandomGrid 10 10
-
+    cellGrid <- createRandomGrid 50 50
     grid <- widgetsForCells cellGrid
+
+    forkIO $ gameLoop grid cellGrid
+
     #add win grid
 
     #showAll win
 
     Gtk.main
+
+gameLoop :: Gtk.Grid -> Grid -> IO ()
+gameLoop uiGrid grid = do
+    gridRef <- newIORef grid
+    let conf = (Timer.setInitDelay  0 (Timer.setInterval 250 Timer.defaultConf))
+
+    Timer.withAsyncTimer conf $ \ timer -> do
+                    forever $ do
+                        Timer.wait timer
+                        currentGrid <- readIORef gridRef
+                        let newGrid = transition currentGrid
+                        writeIORef gridRef newGrid
+                        GLib.idleAdd GLib.PRIORITY_DEFAULT $ updateGrid uiGrid newGrid  >> return False
+
+
+
 
 pane :: IO Gtk.Grid
 pane = new Gtk.Grid []
