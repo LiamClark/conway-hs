@@ -72,3 +72,21 @@ cellWidget cell = do
 classForCell :: Cell -> T.Text
 classForCell Alive = "alive"
 classForCell Dead = ""
+
+updateGrid :: Gtk.Grid -> Grid -> IO ()
+updateGrid uiGrid (Grid grid) = sequence_ $ Compose updatedCells
+    where
+        updatedCells = bimapIndexed grid (stuffs uiGrid)
+        stuffs :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
+        stuffs grid x y cell = do
+            child <- Gtk.gridGetChildAt grid (fromIntegral x) (fromIntegral y)
+            maybe (pure ()) (updateCell cell) child
+
+
+updateCell :: Cell -> Gtk.Widget -> IO ()
+updateCell Alive widget = do
+    sc <- Gtk.widgetGetStyleContext widget
+    Gtk.styleContextAddClass sc "alive"
+updateCell Dead widget = do
+    sc <- Gtk.widgetGetStyleContext widget
+    Gtk.styleContextRemoveClass sc "alive"
