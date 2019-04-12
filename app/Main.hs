@@ -5,6 +5,10 @@ import qualified GI.Gtk as Gtk
 import Data.GI.Base
 import GI.Cairo as Cairo
 
+import qualified Data.Text as T
+
+import Data.Functor.Compose
+
 import Lib
 
 main :: IO ()
@@ -19,15 +23,11 @@ main = do
     on button #clicked (set button [
             #sensitive := False,
             #label := "Started"])
-    grid <- pane
-    #add win grid
-    area1 <- drawArea'
-    area2 <- drawArea'
-    area3 <- drawArea'
 
-    singleCellAttach grid area1 0 0
-    singleCellAttach grid area2 0 1
-    singleCellAttach grid area3 1 0
+    cellGrid <- createRandomGrid 10 10
+
+    grid <- widgetsForCells cellGrid
+    #add win grid
 
     #showAll win
 
@@ -43,15 +43,32 @@ kill widget = do
 singleCellAttach grid widget left top = do
     Gtk.gridAttach grid widget left top 1 1 
 
+widgetsForCells :: Grid -> IO Gtk.Grid
+widgetsForCells (Grid grid) = do
+     gtkGrid <- pane
+     sequence_ $ Compose (stuffs gtkGrid)
+     return gtkGrid
+
+    where
+        stuffs :: Gtk.Grid -> [[IO ()]] 
+        stuffs pane = bimapIndexed grid (createAndPlaceCell pane)
+        createAndPlaceCell :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
+        createAndPlaceCell gtkGrid x y cell = do
+                widget <- cellWidget cell
+                singleCellAttach gtkGrid widget (fromIntegral x) (fromIntegral y)
 
 -- This only works if the style provider is added to every label, not sure why?
 -- but we should add a class to the widget
-drawArea' = do
+cellWidget cell = do
     lbl <- new Gtk.Label [#label := ""]
     sc <- Gtk.widgetGetStyleContext lbl
     Gtk.widgetSetSizeRequest lbl 20 20
-    Gtk.styleContextAddClass sc "alive"
+    Gtk.styleContextAddClass sc (classForCell cell)
     css <- Gtk.cssProviderNew
     Gtk.cssProviderLoadFromPath css "app/style.css"
     Gtk.styleContextAddProvider sc css 0
     return lbl
+
+classForCell :: Cell -> T.Text
+classForCell Alive = "alive"
+classForCell Dead = ""

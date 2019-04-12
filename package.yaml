@@ -24,6 +24,8 @@ dependencies:
 - gi-gtk
 - haskell-gi-base
 - gi-cairo
+- random
+- text
 
 library:
   source-dirs: src
