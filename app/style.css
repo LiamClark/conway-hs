@@ -1,7 +1,9 @@
-eventbox {
-    background-color: #0274d9;
+* {
+    background-color: #002b36;
+    border: solid 1px #073642;
+    border-radius: 3px;
+    transition: background-color 0.3s linear;
 }
-
 .alive {
-    background-color: #0274d9;
+    background-color: #859900;
 }
