@@ -14,6 +14,7 @@ import Control.Concurrent (forkIO)
 import Control.Concurrent.Async.Timer as Timer
 
 import Lib
+import ExampleGrids (myGrid)
 
 main :: IO ()
 main = do
@@ -21,7 +22,8 @@ main = do
     win <- new Gtk.Window [ #title := "Conway"]
     on win #destroy Gtk.mainQuit
 
-    cellGrid <- createRandomGrid 50 50
+    let cellGrid = makeGrid myGrid
+    -- cellGrid <- createRandomGrid 50 50
     uiGrid <- createUIGrid cellGrid
 
     forkIO $ gameLoop uiGrid cellGrid
@@ -86,7 +88,7 @@ createUIGrid (Grid cells) = do
         createAndPlaceCell :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
         createAndPlaceCell gtkGrid x y cell = do
             widget <- cellWidget cell
-            Gtk.gridAttach gtkGrid widget (fromIntegral x) (fromIntegral y) 1 1
+            Gtk.gridAttach gtkGrid widget (fromIntegral y) (fromIntegral x) 1 1
 
         cellWidget :: Cell -> IO Gtk.Label
         cellWidget cellState = do
