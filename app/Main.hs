@@ -6,14 +6,13 @@ import qualified GI.Gtk as Gtk
 import qualified GI.GLib as GLib
 import Data.GI.Base (new, on, set, AttrOp((:=)))
 
-import qualified Data.Text as T
+import Data.Functor.Compose (Compose(..))
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 
-import Data.Functor.Compose
-import Data.IORef
-
-import Control.Monad
-import Control.Concurrent
+import Control.Monad (void, forever)
+import Control.Concurrent (forkIO)
 import Control.Concurrent.Async.Timer as Timer
+
 import Lib
 
 main :: IO ()
@@ -23,86 +22,78 @@ main = do
     on win #destroy Gtk.mainQuit
 
     cellGrid <- createRandomGrid 50 50
-    grid <- widgetsForCells cellGrid
+    uiGrid <- createUIGrid cellGrid
 
-    forkIO $ gameLoop grid cellGrid
+    forkIO $ gameLoop uiGrid cellGrid
 
-    #add win grid
-
+    #add win uiGrid
     #showAll win
-
     Gtk.main
 
-gameLoop :: Gtk.Grid -> Grid -> IO ()
-gameLoop uiGrid grid = do
-    gridRef <- newIORef grid
-    let conf = Timer.setInitDelay  0 (Timer.setInterval 250 Timer.defaultConf)
+tickDelay :: Int
+tickDelay = 500
 
-    Timer.withAsyncTimer conf $ \ timer ->
+gameLoop :: Gtk.Grid -> Grid -> IO ()
+gameLoop uiGrid gridState = do
+    gridRef <- newIORef gridState
+    let conf = Timer.setInitDelay 0 (Timer.setInterval tickDelay Timer.defaultConf)
+
+    Timer.withAsyncTimer conf $ \timer ->
                     forever $ do
                         Timer.wait timer
-                        currentGrid <- readIORef gridRef
-                        let newGrid = transition currentGrid
-                        writeIORef gridRef newGrid
-                        GLib.idleAdd GLib.PRIORITY_DEFAULT $ updateGrid uiGrid newGrid  >> return False
-
-
-
-
-pane :: IO Gtk.Grid
-pane = new Gtk.Grid []
-
-kill widget = do
-    sc <- Gtk.widgetGetStyleContext widget
-    Gtk.styleContextRemoveClass sc "alive"
-
-singleCellAttach grid widget left top =
-    Gtk.gridAttach grid widget left top 1 1
-
-widgetsForCells :: Grid -> IO Gtk.Grid
-widgetsForCells (Grid grid) = do
-     gtkGrid <- pane
-     sequence_ $ Compose (stuffs gtkGrid)
-     return gtkGrid
+                        tick gridRef
 
     where
-        stuffs :: Gtk.Grid -> [[IO ()]]
-        stuffs pane = bimapIndexed grid (createAndPlaceCell pane)
+        tick :: IORef Grid -> IO ()
+        tick gridRef = do
+            currentGrid <- readIORef gridRef
+            let newGrid = transition currentGrid
+            writeIORef gridRef newGrid
+            void $ GLib.idleAdd GLib.PRIORITY_DEFAULT (renderGrid uiGrid newGrid >> pure False)
+
+        renderGrid :: Gtk.Grid -> Grid -> IO ()
+        renderGrid uiGrid gridState = sequence_ $ Compose (renderAllCells gridState)
+
+        renderAllCells :: Grid -> [[IO ()]]
+        renderAllCells (Grid cells) = bimapIndexed cells (renderCellAtPosition uiGrid)
+
+        renderCellAtPosition :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
+        renderCellAtPosition uiGrid x y cell = do
+            child <- Gtk.gridGetChildAt uiGrid (fromIntegral x) (fromIntegral y)
+            case child of
+                Nothing -> pure ()
+                (Just uiCell) -> renderCell cell uiCell
+
+        renderCell :: Gtk.IsWidget a => Cell -> a -> IO ()
+        renderCell aliveOrDead widget = do
+            sc <- Gtk.widgetGetStyleContext widget
+            case aliveOrDead of
+                Alive -> Gtk.styleContextAddClass sc "alive"
+                Dead -> Gtk.styleContextRemoveClass sc "alive"
+
+
+createUIGrid :: Grid -> IO Gtk.Grid
+createUIGrid (Grid cells) = do
+    gtkGrid <- new Gtk.Grid []
+    sequence_ $ Compose (createUICells gtkGrid)
+    pure gtkGrid
+
+    where
+        createUICells :: Gtk.Grid -> [[IO ()]]
+        createUICells pane =
+            bimapIndexed cells (createAndPlaceCell pane)
+
         createAndPlaceCell :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
         createAndPlaceCell gtkGrid x y cell = do
-                widget <- cellWidget cell
-                singleCellAttach gtkGrid widget (fromIntegral x) (fromIntegral y)
+            widget <- cellWidget cell
+            Gtk.gridAttach gtkGrid widget (fromIntegral x) (fromIntegral y) 1 1
 
--- This only works if the style provider is added to every label, not sure why?
--- but we should add a class to the widget
-cellWidget cell = do
-    lbl <- new Gtk.Label [#label := ""]
-    sc <- Gtk.widgetGetStyleContext lbl
-    Gtk.widgetSetSizeRequest lbl 20 20
-    Gtk.styleContextAddClass sc (classForCell cell)
-    css <- Gtk.cssProviderNew
-    Gtk.cssProviderLoadFromPath css "app/style.css"
-    Gtk.styleContextAddProvider sc css 0
-    return lbl
-
-classForCell :: Cell -> T.Text
-classForCell Alive = "alive"
-classForCell Dead = ""
-
-updateGrid :: Gtk.Grid -> Grid -> IO ()
-updateGrid uiGrid (Grid grid) = sequence_ $ Compose updatedCells
-    where
-        updatedCells = bimapIndexed grid (stuffs uiGrid)
-        stuffs :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
-        stuffs grid x y cell = do
-            child <- Gtk.gridGetChildAt grid (fromIntegral x) (fromIntegral y)
-            maybe (pure ()) (updateCell cell) child
-
-
-updateCell :: Cell -> Gtk.Widget -> IO ()
-updateCell Alive widget = do
-    sc <- Gtk.widgetGetStyleContext widget
-    Gtk.styleContextAddClass sc "alive"
-updateCell Dead widget = do
-    sc <- Gtk.widgetGetStyleContext widget
-    Gtk.styleContextRemoveClass sc "alive"
+        cellWidget :: Cell -> IO Gtk.Label
+        cellWidget cellState = do
+            uiCell <- new Gtk.Label [#label := ""]
+            Gtk.widgetSetSizeRequest uiCell 20 20
+            sc <- Gtk.widgetGetStyleContext uiCell
+            css <- Gtk.cssProviderNew
+            Gtk.styleContextAddProvider sc css 0
+            Gtk.cssProviderLoadFromPath css "app/style.css"
+            pure uiCell

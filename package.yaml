@@ -24,7 +24,6 @@ dependencies:
 - gi-gtk
 - gi-glib
 - haskell-gi-base
-- gi-cairo
 - random
 - text
 - async-timer
