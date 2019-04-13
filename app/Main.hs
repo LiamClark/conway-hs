@@ -52,10 +52,7 @@ gameLoop uiGrid gridState = do
             void $ GLib.idleAdd GLib.PRIORITY_DEFAULT (renderGrid uiGrid newGrid >> pure False)
 
         renderGrid :: Gtk.Grid -> Grid -> IO ()
-        renderGrid uiGrid gridState = sequence_ $ Compose (renderAllCells gridState)
-
-        renderAllCells :: Grid -> [[IO ()]]
-        renderAllCells (Grid cells) = bimapIndexed cells (renderCellAtPosition uiGrid)
+        renderGrid uiGrid = forallCells (renderCellAtPosition uiGrid)
 
         renderCellAtPosition :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
         renderCellAtPosition uiGrid x y cell = do
@@ -73,16 +70,12 @@ gameLoop uiGrid gridState = do
 
 
 createUIGrid :: Grid -> IO Gtk.Grid
-createUIGrid (Grid cells) = do
+createUIGrid grid = do
     gtkGrid <- new Gtk.Grid []
-    sequence_ $ Compose (createUICells gtkGrid)
+    forallCells (createAndPlaceCell gtkGrid) grid
     pure gtkGrid
 
     where
-        createUICells :: Gtk.Grid -> [[IO ()]]
-        createUICells pane =
-            bimapIndexed cells (createAndPlaceCell pane)
-
         createAndPlaceCell :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
         createAndPlaceCell gtkGrid x y cell = do
             widget <- cellWidget cell
