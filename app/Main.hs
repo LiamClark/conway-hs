@@ -1,10 +1,10 @@
-{-# LANGUAGE OverloadedStrings, OverloadedLabels #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedLabels #-}
 module Main where
 
 import qualified GI.Gtk as Gtk
 import qualified GI.GLib as GLib
-import Data.GI.Base
-import GI.Cairo as Cairo
+import Data.GI.Base (new, on, set, AttrOp((:=)))
 
 import qualified Data.Text as T
 
@@ -20,14 +20,7 @@ main :: IO ()
 main = do
     Gtk.init Nothing
     win <- new Gtk.Window [ #title := "Conway"]
-
     on win #destroy Gtk.mainQuit
-
-
-    button <- new Gtk.Button [ #label := "Start"]
-    on button #clicked (set button [
-            #sensitive := False,
-            #label := "Started"])
 
     cellGrid <- createRandomGrid 50 50
     grid <- widgetsForCells cellGrid
@@ -43,9 +36,9 @@ main = do
 gameLoop :: Gtk.Grid -> Grid -> IO ()
 gameLoop uiGrid grid = do
     gridRef <- newIORef grid
-    let conf = (Timer.setInitDelay  0 (Timer.setInterval 250 Timer.defaultConf))
+    let conf = Timer.setInitDelay  0 (Timer.setInterval 250 Timer.defaultConf)
 
-    Timer.withAsyncTimer conf $ \ timer -> do
+    Timer.withAsyncTimer conf $ \ timer ->
                     forever $ do
                         Timer.wait timer
                         currentGrid <- readIORef gridRef
@@ -63,8 +56,8 @@ kill widget = do
     sc <- Gtk.widgetGetStyleContext widget
     Gtk.styleContextRemoveClass sc "alive"
 
-singleCellAttach grid widget left top = do
-    Gtk.gridAttach grid widget left top 1 1 
+singleCellAttach grid widget left top =
+    Gtk.gridAttach grid widget left top 1 1
 
 widgetsForCells :: Grid -> IO Gtk.Grid
 widgetsForCells (Grid grid) = do
@@ -73,7 +66,7 @@ widgetsForCells (Grid grid) = do
      return gtkGrid
 
     where
-        stuffs :: Gtk.Grid -> [[IO ()]] 
+        stuffs :: Gtk.Grid -> [[IO ()]]
         stuffs pane = bimapIndexed grid (createAndPlaceCell pane)
         createAndPlaceCell :: Gtk.Grid -> Int -> Int -> Cell -> IO ()
         createAndPlaceCell gtkGrid x y cell = do
