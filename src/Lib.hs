@@ -24,7 +24,7 @@ cellFromBool True = Alive
 cellFromBool False = Dead
 
 transition :: Grid -> Grid
-transition (Grid grid) = Grid $ bimapIndexed grid (deadOrAlive (Grid grid))
+transition (Grid grid) = Grid $ mapWithIndices grid (deadOrAlive (Grid grid))
 
 
 deadOrAlive :: Grid -> Int -> Int -> Cell -> Cell
@@ -43,8 +43,21 @@ isAlive :: Cell -> Bool
 isAlive Dead = False
 isAlive Alive = True
 
-bimapIndexed :: [[a]] -> (Int -> Int -> a -> b) -> [[b]]
-bimapIndexed xs f = mapIndexed xs (\xind ys -> mapIndexed ys (\yind cell -> f xind yind cell))
+forallCells :: (Int -> Int -> Cell -> IO ()) -> Grid -> IO ()
+forallCells action (Grid cells) = evaluateActions combinedActions
+    where
+        allActions = mapWithIndices cells action
+        combinedActions = map evaluateActions allActions
+
+        evaluateActions :: [IO ()] -> IO ()
+        evaluateActions [] = pure ()
+        evaluateActions (anAction:actions) = do
+            anAction
+            evaluateActions actions
+
+
+mapWithIndices :: [[a]] -> (Int -> Int -> a -> b) -> [[b]]
+mapWithIndices xs f = mapIndexed xs (\xind ys -> mapIndexed ys (\yind cell -> f xind yind cell))
 
 mapIndexed :: [a] -> (Int -> a -> b) -> [b]
 mapIndexed xs f = fmap (uncurry f) indices
