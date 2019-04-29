@@ -2,93 +2,105 @@ module Lib where
 
 import Data.Maybe
 import Control.Monad
-import System.Random
+import Data.Functor.Compose
 
-data Cell =
-    Dead | Alive
+type Cell = CellState
+data CellState =
+    Dead
+  | Alive
+  deriving (Eq, Show)
 
 -- assume the grid is square
-newtype Grid = Grid [[Cell]]
+newtype Grid = Grid [[CellState]] deriving Show
+
 
 makeGrid :: [[Int]] -> Grid
-makeGrid myGrid = Grid $ bimapIndexed myGrid (\_ _ i -> cellFromBool (i==1))
+makeGrid myGrid = Grid
+  [ [ cellFromBool element | element <- row ] | row <- myGrid ]
 
-createRandomGrid :: Int -> Int -> IO Grid
-createRandomGrid x y = fmap Grid randomCells
-    where
-        randomBools :: IO [[Bool]]
-        randomBools = replicateM x (replicateM y randomIO)
+cellFromBool :: Int -> CellState
+cellFromBool 0 = Dead
+cellFromBool _ = Alive
 
-        randomCells :: IO [[Cell]]
-        randomCells = (fmap . fmap . fmap) cellFromBool randomBools
+neighbours  :: (Int, Int) -> [(Int,Int)]
+neighbours (x,y) = [
+    (x-1,y-1),
+    (x-1,y  ),
+    (x-1,y+1),
+    (x+1,y-1),
+    (x+1,y),
+    (x+1,y+1),
+    (x  ,y-1),
+    (x  ,y+1)
+  ]
 
-cellFromBool :: Bool -> Cell
-cellFromBool True = Alive
-cellFromBool False = Dead
+getCellState :: Grid -> (Int, Int) -> CellState
+getCellState grid@(Grid cells) (x,y)
+  | isInBounds grid (x,y) = cells !! y !! x
+  | otherwise = Dead
+
+checkBounds :: [a] -> Int -> Bool
+checkBounds xs y =
+  y >= 0 && y < length xs
+
+isInBounds :: Grid -> (Int, Int) -> Bool
+isInBounds (Grid cells) (x,y) =
+  checkBounds cells y && checkBounds (cells !! y) x
+
+aliveNeighbours :: Grid -> (Int, Int) -> Int
+aliveNeighbours grid position = aliveCells
+  where
+    aliveCells = length $ filter (== Alive) states
+    states = map (getCellState grid) n
+    n = neighbours position
+
+updateCellState :: CellState -> Int -> CellState
+updateCellState Alive 2 = Alive
+updateCellState _ 3 = Alive
+updateCellState _  _ = Dead
 
 transition :: Grid -> Grid
-transition (Grid grid) = Grid $ mapWithIndices grid (deadOrAlive (Grid grid))
-
-
-deadOrAlive :: Grid -> Int -> Int -> Cell -> Cell
-deadOrAlive grid x y cell = case cell of
-                    Dead -> if aliveNeighbours == 3 then Alive else Dead
-                    Alive -> case aliveNeighbours of
-                        0 -> Dead
-                        1 -> Dead
-                        2 -> Alive
-                        3 -> Alive
-                        _ -> Dead
-
-    where aliveNeighbours = length $ filter isAlive (neighbours grid x y)
-
-isAlive :: Cell -> Bool
-isAlive Dead = False
-isAlive Alive = True
-
-forallCells :: (Int -> Int -> Cell -> IO ()) -> Grid -> IO ()
-forallCells action (Grid cells) = evaluateActions combinedActions
+transition grid@(Grid cells) = Grid $ mapWithIndices cells getNeighboursAndUpdate
     where
-        allActions = mapWithIndices cells action
-        combinedActions = map evaluateActions allActions
-
-        evaluateActions :: [IO ()] -> IO ()
-        evaluateActions [] = pure ()
-        evaluateActions (anAction:actions) = do
-            anAction
-            evaluateActions actions
-
+      getNeighboursAndUpdate y x cell =
+        let
+          alive = aliveNeighbours grid (x, y)
+        in updateCellState cell alive
 
 mapWithIndices :: [[a]] -> (Int -> Int -> a -> b) -> [[b]]
-mapWithIndices xs f = mapIndexed xs (\xind ys -> mapIndexed ys (\yind cell -> f xind yind cell))
+mapWithIndices xs f = mapWithIndex xs mapRow
+  where mapRow cells yind = mapWithIndex cells mapElem
+          where
+            mapElem cell xind = f yind xind cell
+
+mapWithIndex :: [a]-> (a -> Int -> b) -> [b]
+mapWithIndex xs f = zipWith f xs [0..]
+
+
+forallCells :: (Int -> Int -> Cell -> IO ()) -> Grid -> IO ()
+forallCells action (Grid cells) = sequenceActions $ concat actions
+    where
+      actions :: [[IO ()]]
+      actions  = mapWithIndices cells action
+
+
+sequenceActions :: [IO ()] -> IO ()
+sequenceActions (x : xs) = x >> sequenceActions xs
+sequenceActions [] = return ()
+
+sequence :: IO () -> IO () -> IO ()
+sequence x y = x >> y
+
+sequenceLists :: [[IO ()]] -> IO ()
+sequenceLists xs = sequence_ $ Compose xs
 
 mapIndexed :: [a] -> (Int -> a -> b) -> [b]
-mapIndexed xs f = fmap (uncurry f) indices
-    where indices = zip [0..] xs
-
-neighbours :: Grid -> Int -> Int -> [Cell]
-neighbours grid x y = catMaybes $ uncurry (safeIndexGrid grid) <$> possibleNeighbours
-    where possibleNeighbours = neighbourIndices x y
+mapIndexed xs f = undefined
 
 
 safeIndexGrid :: Grid -> Int -> Int -> Maybe Cell
-safeIndexGrid (Grid grid) x y =
-    if checkBounds grid x
-    then
-        let ys = grid !! x in
-             if checkBounds ys y
-             then Just $ ys !! y
-             else Nothing
-    else Nothing
-
+safeIndexGrid (Grid grid) x y = undefined
 
 neighbourIndices :: Int -> Int -> [(Int, Int)]
-neighbourIndices x y = [
-    (x + 1, y), (x - 1, y), -- left and right
-    (x, y + 1), (x, y - 1), -- up and down
-    (x + 1, y + 1), (x + 1, y - 1), -- diag right up and down.
-    (x - 1, y + 1), (x - 1, y - 1) -- diag left up and down.
-  ]
+neighbourIndices = undefined
 
-checkBounds :: [a] -> Int -> Bool
-checkBounds xs ind = ind >= 0 && ind < length xs
