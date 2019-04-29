@@ -10,6 +10,9 @@ data Cell =
 -- assume the grid is square
 newtype Grid = Grid [[Cell]]
 
+makeGrid :: [[Int]] -> Grid
+makeGrid myGrid = Grid $ bimapIndexed myGrid (\_ _ i -> cellFromBool (i==1))
+
 createRandomGrid :: Int -> Int -> IO Grid
 createRandomGrid x y = fmap Grid randomCells
     where
@@ -64,12 +67,12 @@ mapIndexed xs f = fmap (uncurry f) indices
     where indices = zip [0..] xs
 
 neighbours :: Grid -> Int -> Int -> [Cell]
-neighbours grid x y = catMaybes $ uncurry (safeBiIndex grid) <$> possibleNeighbours
+neighbours grid x y = catMaybes $ uncurry (safeIndexGrid grid) <$> possibleNeighbours
     where possibleNeighbours = neighbourIndices x y
 
 
-safeBiIndex :: Grid -> Int -> Int -> Maybe Cell
-safeBiIndex (Grid grid) x y =
+safeIndexGrid :: Grid -> Int -> Int -> Maybe Cell
+safeIndexGrid (Grid grid) x y =
     if checkBounds grid x
     then
         let ys = grid !! x in
